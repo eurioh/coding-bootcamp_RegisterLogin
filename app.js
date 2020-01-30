@@ -6,9 +6,10 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
-const saltRounds = 10;
-
+// require three packages 
+const session = require("express-session");
+const passport = require ("passport");
+const passportLocalMongoose = require ("passport-local-mongoose");
 
 const app = express();
 
@@ -17,19 +18,40 @@ app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({
     extended: true
 }));
+//order is important
+//important to use app.use(session) above mongoose connect
+app.use(session({
+    secret: "password is secrete you dumbass!",
+    resave: false,
+    saveUninitialized: false
+})); //set up session to set a secret
+
+app.use(passport.initialize());
+app.use(passport.session()); //use passport to manage our session
+
 
 mongoose.connect("mongodb://localhost:27017/userDB", {
     useUnifiedTopology: true,
     useNewUrlParser: true
 });
 
+mongoose.set('useCreateIndex', true); //use for third party plugins
+
+
 const userSchema = new mongoose.Schema({
     email: String,
     password: String
 });
 
+userSchema.plugin(passportLocalMongoose);//set up user schema to use passortlocal as a plugin
 
 const User = new mongoose.model("User", userSchema);
+
+passport.use(User.createStrategy()); //use passport to create local (User) login stratety
+ 
+//seialized and deserialize == create cookies and destroy cookies
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 app.get("/", function (req, res) {
     res.render("home");
@@ -43,43 +65,50 @@ app.get("/register", function (req, res) {
     res.render("register");
 });
 
+app.get("/secrets", function(req,res){
+    if(req.isAuthenticated()){
+        res.render("secrets");
+    }else{
+        res.redirect("/login");
+    }
+});
+
 app.post("/register", function (req, res) {
-
-    bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
-        //req.body.password created into hash after a few rounds of salt and the created hash save as password in the database
-        const newUser = new User({
-            email: req.body.username,
-            password: hash
-        });
-
-        newUser.save(function (err) {
-            if (err) {
-                console.log(err);
-            } else {
-                res.render("secrets");
-            }
-        });
-    });
+    //This method comes from passportlocalmongoose package
+    User.register({username: req.body.username}, req.body.password, function(err, user){
+        if(err){
+            console.log(err);
+            res.redirect("/register");
+        }else{
+            passport.authenticate("local")(req, res, function(){
+                res.redirect("/secrets");
+            }); //once you register, typing "/secrets"in your brower automatically bring you to the secrets page without authentication as long as your session lasts
+        }
+    }); //it's a middle man to handle all creating saving new user, interacting with mongoose directly
 });
 
 app.post("/login", function (req, res) {
-    const username = req.body.username;
-    const password = req.body.password;
+    const user = new User({
+        username: req.body.username,
+        password: req.body.password
+    });
 
-    User.findOne({email: username}, function (err, foundUser) {
-        if (err) {
-                console.log(err);
-        } else {
-            if (foundUser) {
-                bcrypt.compare(password, foundUser.password, function (err, result) {
-                    //compare the password input by the user and foundUser.password in the database
-                    if (result === true) {
-                        res.render("secrets");
-                    }
-                });
-            }
+    //login method is from passport user is from user credential above
+    req.login(user, function(err){
+        if(err){
+            console.log(err);
+        }else{
+            passport.authenticate("local")(req, res, function(){
+                res.redirect("/secrets");
+            })
         }
     });
+});
+
+//logout and  deauthenticated 
+app.get("/logout", function(req,res){
+    req.logout();
+    res.redirect("/");
 });
 
 app.listen(3000, function () {
