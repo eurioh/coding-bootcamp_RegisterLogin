@@ -21,7 +21,7 @@ app.use(bodyParser.urlencoded({
 //order is important
 //important to use app.use(session) above mongoose connect
 app.use(session({
-    secret: "password is secrete you dumbass!",
+    secret: process.env.SESSION_SECRET,//this is how you hide secret string with .env
     resave: false,
     saveUninitialized: false
 })); //set up session to set a secret
@@ -35,7 +35,7 @@ mongoose.connect("mongodb://localhost:27017/userDB", {
     useNewUrlParser: true
 });
 
-mongoose.set('useCreateIndex', true); //use for third party plugins
+mongoose.set('useCreateIndex', true); //use for third party library
 
 
 const userSchema = new mongoose.Schema({
@@ -88,6 +88,7 @@ app.post("/register", function (req, res) {
 });
 
 app.post("/login", function (req, res) {
+    //create new user
     const user = new User({
         username: req.body.username,
         password: req.body.password
