@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
     password: String
 });
 
-// const secret = "Thisissecretencriptionkey,don'tbothertotry." // will move to .env file to set the environment variable
+// const secret = "..." will move to .env file to set the environment variable
 //It is important to add plugins before mongoose model!
 userSchema.plugin(encrypt, {secret : process.env.SECRET, encryptedFields: ['password']});
 
